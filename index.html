@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem Absensi Siswa</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    select, input, button { margin: 5px; padding: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background-color: #f2f2f2; }
+    #login-section { margin-bottom: 20px; }
+    #absensi-form, #rekap-section { display: none; }
+  </style>
+</head>
+<body>
+  <h2>Sistem Absensi Siswa</h2>
+
+  <div id="login-section">
+    <h3>Login Guru</h3>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <button onclick="loginGuru()">Login</button>
+  </div>
+
+  <div id="absensi-form">
+    <label for="kelas">Pilih Kelas:</label>
+    <select id="kelas">
+      <option value="X A">X A</option>
+      <option value="X B">X B</option>
+      <option value="X C">X C</option>
+      <option value="X D">X D</option>
+      <option value="XI C">XI C</option>
+      <option value="XI D">XI D</option>
+      <option value="XI E">XI E</option>
+    </select>
+
+    <label for="mapel">Pilih Mata Pelajaran:</label>
+    <select id="mapel">
+      <option value="Sosiologi">Sosiologi</option>
+      <option value="Antropologi">Antropologi</option>
+      <option value="Informatika">Informatika</option>
+    </select>
+
+    <h3>Form Absensi</h3>
+    <input type="text" id="nama" placeholder="Nama Siswa">
+    <input type="text" id="nis" placeholder="NIS/NISN">
+    <select id="status">
+      <option value="Hadir">Hadir</option>
+      <option value="Sakit">Sakit</option>
+      <option value="Izin">Izin</option>
+      <option value="Alpa">Alpa</option>
+      <option value="Terlambat">Terlambat</option>
+    </select>
+    <button onclick="tambahAbsensi()">Catat</button>
+  </div>
+
+  <div id="rekap-section">
+    <h3>Rekap Absensi</h3>
+    <button onclick="exportToExcel()">Export ke Excel</button>
+    <button onclick="exportToPDF()">Export ke PDF</button>
+    <table id="tabelAbsensi">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Nama</th>
+          <th>NIS</th>
+          <th>Kelas</th>
+          <th>Mata Pelajaran</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const akunGuru = {
+      username: "guru",
+      password: "1234"
+    };
+
+    function loginGuru() {
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+      if (user === akunGuru.username && pass === akunGuru.password) {
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('absensi-form').style.display = 'block';
+        document.getElementById('rekap-section').style.display = 'block';
+        tampilkanAbsensi();
+      } else {
+        alert('Login gagal. Coba lagi.');
+      }
+    }
+
+    function tambahAbsensi() {
+      const nama = document.getElementById('nama').value;
+      const nis = document.getElementById('nis').value;
+      const kelas = document.getElementById('kelas').value;
+      const mapel = document.getElementById('mapel').value;
+      const status = document.getElementById('status').value;
+      const tanggal = new Date().toISOString().slice(0, 10);
+
+      if (!nama || !nis) {
+        alert('Nama dan NIS harus diisi.');
+        return;
+      }
+
+      const data = { tanggal, nama, nis, kelas, mapel, status };
+      const dataLokal = JSON.parse(localStorage.getItem('absensi')) || [];
+      dataLokal.push(data);
+      localStorage.setItem('absensi', JSON.stringify(dataLokal));
+      tampilkanAbsensi();
+
+      document.getElementById('nama').value = '';
+      document.getElementById('nis').value = '';
+    }
+
+    function tampilkanAbsensi() {
+      const tbody = document.querySelector('#tabelAbsensi tbody');
+      tbody.innerHTML = '';
+      const data = JSON.parse(localStorage.getItem('absensi')) || [];
+
+      data.forEach(item => {
+        const row = `<tr>
+          <td>${item.tanggal}</td>
+          <td>${item.nama}</td>
+          <td>${item.nis}</td>
+          <td>${item.kelas}</td>
+          <td>${item.mapel}</td>
+          <td>${item.status}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    function exportToExcel() {
+      let data = document.querySelector('#tabelAbsensi').outerHTML;
+      const blob = new Blob([data], { type: 'application/vnd.ms-excel' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'rekap_absensi.xls';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function exportToPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const rows = document.querySelectorAll("#tabelAbsensi tr");
+      let y = 10;
+      rows.forEach((row, index) => {
+        let x = 10;
+        row.querySelectorAll("td, th").forEach(cell => {
+          doc.text(cell.innerText, x, y);
+          x += 30;
+        });
+        y += 10;
+      });
+      doc.save("rekap_absensi.pdf");
+    }
+  </script>
+</body>
+</html>
