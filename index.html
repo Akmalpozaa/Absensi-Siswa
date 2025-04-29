@@ -11,7 +11,7 @@
     th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
     th { background-color: #f2f2f2; }
     #login-section { margin-bottom: 20px; }
-    #absensi-form, #rekap-section { display: none; }
+    #absensi-form, #rekap-section, #siswa-section { display: none; }
   </style>
 </head>
 <body>
@@ -44,8 +44,7 @@
     </select>
 
     <h3>Form Absensi</h3>
-    <input type="text" id="nama" placeholder="Nama Siswa">
-    <input type="text" id="nis" placeholder="NIS/NISN">
+    <select id="siswaSelect"></select>
     <select id="status">
       <option value="Hadir">Hadir</option>
       <option value="Sakit">Sakit</option>
@@ -54,6 +53,15 @@
       <option value="Terlambat">Terlambat</option>
     </select>
     <button onclick="tambahAbsensi()">Catat</button>
+  </div>
+
+  <div id="siswa-section">
+    <h3>Manajemen Siswa</h3>
+    <input type="text" id="namaBaru" placeholder="Nama Siswa">
+    <input type="text" id="nisBaru" placeholder="NIS/NISN">
+    <button onclick="tambahSiswa()">Tambah Siswa</button>
+    <input type="file" id="fileExcel" accept=".xls,.xlsx">
+    <button onclick="importSiswa()">Impor dari Excel</button>
   </div>
 
   <div id="rekap-section">
@@ -75,6 +83,7 @@
     </table>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.3/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
     const akunGuru = {
@@ -89,40 +98,61 @@
         document.getElementById('login-section').style.display = 'none';
         document.getElementById('absensi-form').style.display = 'block';
         document.getElementById('rekap-section').style.display = 'block';
+        document.getElementById('siswa-section').style.display = 'block';
         tampilkanAbsensi();
+        isiSelectSiswa();
       } else {
         alert('Login gagal. Coba lagi.');
       }
     }
 
+    function tambahSiswa() {
+      const nama = document.getElementById('namaBaru').value;
+      const nis = document.getElementById('nisBaru').value;
+      if (!nama || !nis) {
+        alert('Isi nama dan NIS siswa.');
+        return;
+      }
+      const siswa = JSON.parse(localStorage.getItem('siswa')) || [];
+      siswa.push({ nama, nis });
+      localStorage.setItem('siswa', JSON.stringify(siswa));
+      document.getElementById('namaBaru').value = '';
+      document.getElementById('nisBaru').value = '';
+      isiSelectSiswa();
+    }
+
+    function isiSelectSiswa() {
+      const siswa = JSON.parse(localStorage.getItem('siswa')) || [];
+      const select = document.getElementById('siswaSelect');
+      select.innerHTML = '';
+      siswa.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.nis;
+        opt.textContent = `${s.nama} (${s.nis})`;
+        select.appendChild(opt);
+      });
+    }
+
     function tambahAbsensi() {
-      const nama = document.getElementById('nama').value;
-      const nis = document.getElementById('nis').value;
+      const siswa = JSON.parse(localStorage.getItem('siswa')) || [];
+      const nis = document.getElementById('siswaSelect').value;
+      const siswaTerpilih = siswa.find(s => s.nis === nis);
       const kelas = document.getElementById('kelas').value;
       const mapel = document.getElementById('mapel').value;
       const status = document.getElementById('status').value;
       const tanggal = new Date().toISOString().slice(0, 10);
 
-      if (!nama || !nis) {
-        alert('Nama dan NIS harus diisi.');
-        return;
-      }
-
-      const data = { tanggal, nama, nis, kelas, mapel, status };
+      const data = { tanggal, nama: siswaTerpilih.nama, nis, kelas, mapel, status };
       const dataLokal = JSON.parse(localStorage.getItem('absensi')) || [];
       dataLokal.push(data);
       localStorage.setItem('absensi', JSON.stringify(dataLokal));
       tampilkanAbsensi();
-
-      document.getElementById('nama').value = '';
-      document.getElementById('nis').value = '';
     }
 
     function tampilkanAbsensi() {
       const tbody = document.querySelector('#tabelAbsensi tbody');
       tbody.innerHTML = '';
       const data = JSON.parse(localStorage.getItem('absensi')) || [];
-
       data.forEach(item => {
         const row = `<tr>
           <td>${item.tanggal}</td>
@@ -147,20 +177,43 @@
       document.body.removeChild(a);
     }
 
-    function exportToPDF() {
+    async function exportToPDF() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      const rows = document.querySelectorAll("#tabelAbsensi tr");
+      const rows = document.querySelectorAll('#tabelAbsensi tr');
       let y = 10;
-      rows.forEach((row, index) => {
+      rows.forEach((row, i) => {
         let x = 10;
-        row.querySelectorAll("td, th").forEach(cell => {
-          doc.text(cell.innerText, x, y);
+        row.querySelectorAll('th,td').forEach(cell => {
+          doc.text(cell.textContent, x, y);
           x += 30;
         });
         y += 10;
       });
-      doc.save("rekap_absensi.pdf");
+      doc.save('rekap_absensi.pdf');
+    }
+
+    function importSiswa() {
+      const fileInput = document.getElementById('fileExcel');
+      const file = fileInput.files[0];
+      if (!file) {
+        alert('Pilih file Excel terlebih dahulu.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const siswa = XLSX.utils.sheet_to_json(sheet);
+        const dataLama = JSON.parse(localStorage.getItem('siswa')) || [];
+        localStorage.setItem('siswa', JSON.stringify([...dataLama, ...siswa]));
+        isiSelectSiswa();
+        alert('Data siswa berhasil diimpor.');
+      };
+      reader.readAsArrayBuffer(file);
     }
   </script>
 </body>
